@@ -267,19 +267,23 @@
       'nil)))
 
 (defun step-args? (defs def args)
-  (if (dethm? def)
-    (if (arity? (dethm.formals def) args)
-      (exprs? defs 'any args)
-      'nil)
-    (if (defun? def)
-      (if (arity? (defun.formals def) args)
+  (if (equal (elem1 args) '*)
+    (if (rator? def)
+      'nil
+      't)
+    (if (dethm? def)
+      (if (arity? (dethm.formals def) args)
         (exprs? defs 'any args)
         'nil)
-      (if (rator? def)
-        (if (arity? (rator.formals def) args)
-          (quoted-exprs? args)
+      (if (defun? def)
+        (if (arity? (defun.formals def) args)
+          (exprs? defs 'any args)
           'nil)
-        'nil))))
+        (if (rator? def)
+          (if (arity? (rator.formals def) args)
+            (quoted-exprs? args)
+            'nil)
+          'nil)))))
 
 (defun step-app? (defs app)
   (step-args? defs
@@ -681,24 +685,99 @@
         (follow-prems path e thm)))
     e))
 
+(defun match-var-es (var concls insts results)
+  (if (atom concls)
+    results
+    (if (var? (car concls))
+      (if (equal var (car concls))
+        (list-union
+          (list1 (car insts))
+          (match-var-es var (cdr concls) (cdr insts) results))
+        (match-var-es var (cdr concls) (cdr insts) results))
+      (if (quote? (car concls))
+        (match-var-es var (cdr concls) (cdr insts) results)
+        (if (if? (car concls))
+          (if (if? (car insts))
+            (match-var-es var (cdr concls) (cdr insts)
+              (match-var-es var
+                (if-QAE (car concls))
+                (if-QAE (car insts))
+                results))
+            (match-var-es var (cdr concls) (cdr insts) results))
+          (if (app? (car insts))
+            (if (equal (app.name (car concls)) (app.name (car insts)))
+              (match-var-es var (cdr concls) (cdr insts)
+                (match-var-es var
+                  (app.args (car concls))
+                  (app.args (car insts))
+                  results))
+              (match-var-es var (cdr concls) (cdr insts) results))
+            (match-var-es var (cdr concls) (cdr insts) results)))))))
+
+(defun match-vars (vars concl inst)
+  (if (atom vars)
+    '()
+    (cons
+      (elem1 (match-var-es (car vars)
+               (list1 concl)
+               (list1 inst)
+               (list1 (quote-c '??))))
+      (match-vars (cdr vars) concl inst))))
+
+(defun extract-claims-es (thms)
+  (if (atom thms)
+    '()
+    (if (var? (car thms))
+      (extract-claims-es (cdr thms))
+      (if (quote? (car thms))
+        (extract-claims-es (cdr thms))
+        (if (if? (car thms))
+          (list-union
+            (extract-claims-es
+              (list2 (if.A (car thms)) (if.E (car thms))))
+            (extract-claims-es (cdr thms)))
+          (if (app-of-equal? (car thms))
+            (list-extend (extract-claims-es (cdr thms)) (car thms))
+            (extract-claims-es (cdr thms))))))))
+
+(defun extract-claim (apps thm)
+  (if (equal apps '(* <))
+    (elem2 (app.args (elem1 (extract-claims-es (list1 thm)))))
+    (if (equal apps '(* >))
+      (elem1 (app.args (elem1 (extract-claims-es (list1 thm)))))
+      (elem1 (extract-claims-es (list1 thm))))))
+
+(defun equality/inst (e path vars apps thm)
+  (if (equal (elem1 apps) '*)
+    (if (focus-is-at-path? path e)
+      (equality/path e path
+        (sub-e vars
+          (match-vars vars
+            (extract-claim apps thm)
+            (find-focus-at-path path e))
+          thm))
+      e)
+    (equality/path e path
+      (sub-e vars apps thm))))
+
 (defun equality/def (claim path app def)
   (if (rator? def)
     (equality/path claim path
       (app-c 'equal (list2 app (eval-op app))))
     (if (defun? def)
-      (equality/path claim path
-        (sub-e (defun.formals def)
-          (app.args app)
-          (app-c 'equal
-            (list2
-              (app-c (defun.name def)
-                (defun.formals def))
-              (defun.body def)))))
+      (equality/inst claim path
+        (defun.formals def)
+        (app.args app)
+        (app-c 'equal
+          (list2
+            (app-c (defun.name def)
+              (defun.formals def))
+            (defun.body def))))
       (if (dethm? def)
-        (equality/path claim path
-          (sub-e (dethm.formals def)
-            (app.args app)
-            (dethm.body def)))
+        (equality/inst claim path
+          (dethm.formals def)
+          (app.args app)
+          (dethm.body def))
         claim))))
 
 (defun rewrite/step (defs claim step)
