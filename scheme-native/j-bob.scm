@@ -75,7 +75,7 @@
 (defun if-QAE (e)
   (list3 (if.Q e) (if.A e) (if.E e)))
 (defun QAE-if (es)
-  (if-c (elem1 es) (elem2 es) (elem3 es)))
+  `(if ,(elem1 es) ,(elem2 es) ,(elem3 es)))
 
 (defun member? (x ys)
   (if/nil (atom ys)
@@ -110,23 +110,23 @@
       '())))
 
 (defun if-c-when-necessary (Q A E)
-  (if/nil (equal A E) A (if-c Q A E)))
+  (if/nil (equal A E) A `(if ,Q ,A ,E)))
 
 (defun conjunction (es)
   (if/nil (atom es)
-    (quote-c 't)
+    `'t
     (if/nil (atom (cdr es))
       (car es)
-      (if-c (car es)
-        (conjunction (cdr es))
-        (quote-c 'nil)))))
+      `(if ,(car es)
+         ,(conjunction (cdr es))
+         'nil))))
 
 (defun implication (es e)
   (if/nil (atom es)
     e
-    (if-c (car es)
-      (implication (cdr es) e)
-      (quote-c 't))))
+    `(if ,(car es)
+       ,(implication (cdr es) e)
+       't)))
 
 (defun lookup (name defs)
   (if/nil (atom defs)
@@ -331,11 +331,8 @@
 (defun extend-rec (defs def)
   (if/nil (defun? def)
     (list-extend defs
-      (defun-c
-        (defun.name def)
-        (defun.formals def)
-        (app-c (defun.name def)
-          (defun.formals def))))
+      `(defun ,(defun.name def) ,(defun.formals def)
+         (,(defun.name def) . ,(defun.formals def))))
     defs))
 
 (defun def-contents? (known-defs formals body)
@@ -418,9 +415,9 @@
                 (if-QAE (car es))))
             (sub-es vars args (cdr es)))
           (cons
-            (app-c (app.name (car es))
-              (sub-es vars args
-                (app.args (car es))))
+            `(,(app.name (car es)) .
+              ,(sub-es vars args
+                 (app.args (car es))))
             (sub-es vars args (cdr es))))))))
 (defun sub-e (vars args e)
   (elem1 (sub-es vars args (list1 e))))
@@ -451,9 +448,8 @@
   (exprs-recs f (list1 e)))
 
 (defun totality/< (meas formals app)
-  (app-c '<
-    (list2 (sub-e formals (app.args app) meas)
-      meas)))
+  `(< . ,(list2 (sub-e formals (app.args app) meas)
+           meas)))
 
 (defun totality/meas (meas formals apps)
   (if/nil (atom apps)
@@ -482,14 +478,13 @@
     (if/nil (equal (expr-recs (defun.name def)
                  (defun.body def))
                '())
-      (quote-c 't)
-      (quote-c 'nil))
-    (if-c
-      (app-c 'natp (list1 meas))
-      (totality/if/nil meas (defun.name def)
-        (defun.formals def)
-        (defun.body def))
-      (quote-c 'nil))))
+      `'t
+      `'nil)
+    `(if (natp . ,(list1 meas))
+       ,(totality/if/nil meas (defun.name def)
+          (defun.formals def)
+          (defun.body def))
+       'nil)))
 
 (defun induction/prems (vars claim apps)
   (if/nil (atom apps)
@@ -534,13 +529,12 @@
 
 (defun rewrite-focus-at-direction (dir e1 e2)
   (if/nil (equal dir 'Q)
-    (if-c e2 (if.A e1) (if.E e1))
+    `(if ,e2 ,(if.A e1) ,(if.E e1))
     (if/nil (equal dir 'A)
-      (if-c (if.Q e1) e2 (if.E e1))
+      `(if ,(if.Q e1) ,e2 ,(if.E e1))
       (if/nil (equal dir 'E)
-        (if-c (if.Q e1) (if.A e1) e2)
-        (app-c (app.name e1)
-          (set-arg dir (app.args e1) e2))))))
+        `(if ,(if.Q e1) ,(if.A e1) ,e2)
+        `(,(app.name e1) . ,(set-arg dir (app.args e1) e2))))))
 
 (defun focus-is-at-direction? (dir e)
   (if/nil (equal dir 'Q)
@@ -650,9 +644,8 @@
       (rands (cdr args)))))
 
 (defun eval-op (app)
-  (quote-c
-    (apply-op (app.name app)
-      (rands (app.args app)))))
+  `',(apply-op (app.name app)
+       (rands (app.args app))))
 
 (defun app-of-equal? (e)
   (if/nil (app? e)
@@ -684,16 +677,14 @@
 (defun equality/def (claim path app def)
   (if/nil (rator? def)
     (equality/path claim path
-      (app-c 'equal (list2 app (eval-op app))))
+      `(equal ,app ,(eval-op app)))
     (if/nil (defun? def)
       (equality/path claim path
         (sub-e (defun.formals def)
           (app.args app)
-          (app-c 'equal
-            (list2
-              (app-c (defun.name def)
-                (defun.formals def))
-              (defun.body def)))))
+          `(equal
+              (,(defun.name def) . ,(defun.formals def))
+              ,(defun.body def))))
       (if/nil (dethm? def)
         (equality/path claim path
           (sub-e (dethm.formals def)
@@ -728,17 +719,17 @@
       (rewrite/steps defs
         (induction/claim defs seed def)
         steps)
-      (quote-c 'nil))))
+      `'nil)))
 
 (defun rewrite/prove+1 (defs pf e)
-  (if/nil (equal e (quote-c 't))
+  (if/nil (equal e `'t)
     (rewrite/prove defs (elem1 pf) (elem2 pf)
       (cdr (cdr pf)))
     e))
 
 (defun rewrite/prove+ (defs pfs)
   (if/nil (atom pfs)
-    (quote-c 't)
+    `'t
     (rewrite/prove+1 defs (car pfs)
       (rewrite/prove+
         (list-extend defs (elem1 (car pfs)))
@@ -746,7 +737,7 @@
 
 (defun rewrite/define (defs def seed steps)
   (if/nil (equal (rewrite/prove defs def seed steps)
-             (quote-c 't))
+             `'t)
     (list-extend defs def)
     defs))
 
@@ -785,8 +776,8 @@
   (if/nil (defs? '() defs)
     (if/nil (proofs? defs pfs)
       (rewrite/prove+ defs pfs)
-      (quote-c 'nil))
-    (quote-c 'nil)))
+      `'nil)
+    `'nil))
 
 (defun J-Bob/define (defs pfs)
   (if/nil (defs? '() defs)
