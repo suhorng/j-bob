@@ -4,8 +4,6 @@
 (define s.+ +)
 (define s.< <)
 (define (num x) (if (number? x) x 0))
-(define (if/nil Q A E)
-  (if (equal? Q 'nil) (E) (A)))
 
 (define (atom x) (if (pair? x) 'nil 't))
 (define (car x) (if (pair? x) (s.car x) '()))
@@ -17,10 +15,10 @@
 (define (< x y)
   (if (s.< (num x) (num y)) 't 'nil))
 
-(define-syntax if
+(define-syntax if/nil
   (syntax-rules ()
     ((_ Q A E)
-     (if/nil Q (lambda () A) (lambda () E)))))
+     (if (equal? Q 'nil) A E))))
 
 (define-syntax defun
   (syntax-rules ()
