@@ -18,7 +18,7 @@
 (define-syntax if/nil
   (syntax-rules ()
     ((_ Q A E)
-     (if (equal? Q 'nil) A E))))
+     (if (equal? Q 'nil) E A))))
 
 (define-syntax defun
   (syntax-rules ()
@@ -31,6 +31,6 @@
      (define (name arg ...) body))))
 
 (defun size (x)
-  (if (atom x)
+  (if/nil (atom x)
     '0
     (+ '1 (+ (size (car x)) (size (cdr x))))))
