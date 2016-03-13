@@ -119,21 +119,14 @@
 (defun QAE-if (es)
   `(if ,(elem1 es) ,(elem2 es) ,(elem3 es)))
 
-(defun member? (x ys)
-  (if/nil (atom ys)
-    'nil
-    (if/nil (equal x (car ys))
-      't
-      (member? x (cdr ys)))))
-
 (defun rator? (name)
-  (member? name
+  (member name
     '(equal atom car cdr cons natp size + <)))
 
 (defun rator.formals (rator)
-  (if/nil (member? rator '(atom car cdr natp size))
+  (if (member rator '(atom car cdr natp size))
     '(x)
-    (if/nil (member? rator '(equal cons + <))
+    (if (member rator '(equal cons + <))
       '(x y)
       'nil)))
 
@@ -192,7 +185,7 @@
     'nil
     (if/nil (defun? def)
       (arity? (defun.formals def) args)
-      (if/nil (rator? def)
+      (if (rator? def)
         (arity? (rator.formals def) args)
         'nil))))
 
@@ -201,13 +194,13 @@
     (app.args app)))
 
 (defun bound? (var vars)
-  (if/nil (equal vars 'any) 't (member? var vars)))
+  (or (equal? vars 'any) (member var vars)))
 
 (defun exprs? (defs vars es)
   (if/nil (atom es)
     't
     (if/nil (var? (car es))
-      (if/nil (bound? (car es) vars)
+      (if (bound? (car es) vars)
         (exprs? defs vars (cdr es))
         'nil)
       (if/nil (quote? (car es))
@@ -260,7 +253,7 @@
 (defun subset? (xs ys)
   (if/nil (atom xs)
     't
-    (if/nil (member? (car xs) ys)
+    (if (member (car xs) ys)
       (subset? (cdr xs) ys)
       'nil)))
 
@@ -282,20 +275,20 @@
   (if/nil (atom vars)
     't
     (if/nil (var? (car vars))
-      (if/nil (member? (car vars) (cdr vars))
+      (if (member (car vars) (cdr vars))
         'nil
         (formals? (cdr vars)))
       'nil)))
 
 (defun direction? (dir)
   (if/nil (natp dir)
-    't
-    (member? dir '(Q A E))))
+    #t
+    (member dir '(Q A E))))
 
 (defun path? (path)
   (if/nil (atom path)
     't
-    (if/nil (direction? (car path))
+    (if (direction? (car path))
       (path? (cdr path))
       'nil)))
 
@@ -315,7 +308,7 @@
       (if/nil (arity? (defun.formals def) args)
         (exprs? defs 'any args)
         'nil)
-      (if/nil (rator? def)
+      (if (rator? def)
         (if/nil (arity? (rator.formals def) args)
           (quoted-exprs? args)
           'nil)
@@ -669,9 +662,9 @@
           'nil)))))
 
 (defun apply-op (rator rands)
-  (if/nil (member? rator '(atom car cdr natp size))
+  (if (member rator '(atom car cdr natp size))
     (unary-op rator (elem1 rands))
-    (if/nil (member? rator '(equal cons + <))
+    (if (member rator '(equal cons + <))
       (binary-op rator
         (elem1 rands)
         (elem2 rands))
@@ -715,7 +708,7 @@
     e))
 
 (defun equality/def (claim path app def)
-  (if/nil (rator? def)
+  (if (rator? def)
     (equality/path claim path
       `(equal ,app ,(eval-op app)))
     (if/nil (defun? def)
