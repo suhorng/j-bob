@@ -23,57 +23,99 @@
 (defun untag (x) (cdr x))
 
 (defun quote-c (value)
-  (tag 'quote (list1 value)))
+  `',value)
 (defun quote? (x)
-  (if/nil (tag? 'quote x) (list1? (untag x)) 'nil))
-(defun quote.value (e) (elem1 (untag e)))
+  (match x
+    [('quote ,val) 't]
+    [else 'nil]))
+(defun quote.value (e)
+  (match e
+    [('quote ,val) val]
+    [else (error 'quote.value (format "Non-quote value: ~s" e))]))
 
-(defun if-c (Q A E) (tag 'if (list3 Q A E)))
+(defun if-c (Q A E) `(if ,Q ,A ,E))
 (defun if? (x)
-  (if/nil (tag? 'if x) (list3? (untag x)) 'nil))
-(defun if.Q (e) (elem1 (untag e)))
-(defun if.A (e) (elem2 (untag e)))
-(defun if.E (e) (elem3 (untag e)))
+  (match x
+    [(if ,Q ,A ,E) 't]
+    [else 'nil]))
+(defun if.Q (e)
+  (match e
+    [(if ,Q ,A ,E) Q]
+    [else (error 'if.Q (format "Non-if expression: ~s" e))]))
+(defun if.A (e)
+  (match e
+    [(if ,Q ,A ,E) A]
+    [else (error 'if.A (format "Non-if expression: ~s" e))]))
+(defun if.E (e)
+  (match e
+    [(if ,Q ,A ,E) E]
+    [else (error 'if.E (format "Non-if expression: ~s" e))]))
 
-(defun app-c (name args) (cons name args))
+(defun app-c (name args) `(,name . ,args))
 (defun app? (x)
-  (if/nil (atom x)
-    'nil
-    (if/nil (quote? x)
-      'nil
-      (if/nil (if? x)
-        'nil
-        't))))
-(defun app.name (e) (car e))
-(defun app.args (e) (cdr e))
+  (match x
+    [('quote . ,dr) 'nil]
+    [(if . ,dr) 'nil]
+    [(,name . ,args) 't]
+    [else 'nil]))
+(defun app.name (e)
+  (match e
+    [(,name . ,args) name]
+    [else (error 'app.name (format "Non-application: ~s" e))]))
+(defun app.args (e)
+  (match e
+    [(,name . ,args) args]
+    [else (error 'app.args (format "Non-application: ~s" e))]))
 
 (defun var? (x)
-  (if/nil (equal x 't)
-    'nil
-    (if/nil (equal x 'nil)
-      'nil
-      (if/nil (natp x)
-        'nil
-        (atom x)))))
+  (match x
+    ['t 'nil]
+    ['nil 'nil]
+    [,n (guard (equal? (natp n) 't)) 'nil]
+    [(,ar . ,dr) 'nil]
+    [else 't]))
 
 (defun defun-c (name formals body)
-  (tag 'defun (list3 name formals body)))
+  `(defun ,name ,formals ,body))
 (defun defun? (x)
-  (if/nil (tag? 'defun x) (list3? (untag x)) 'nil))
-(defun defun.name (def) (elem1 (untag def)))
-(defun defun.formals (def) (elem2 (untag def)))
-(defun defun.body (def) (elem3 (untag def)))
+  (match x
+    [(defun ,name ,formals ,body) 't]
+    [else 'nil]))
+(defun defun.name (def)
+  (match def
+    [(defun ,name ,formals ,body) name]
+    [else (error 'defun.name (format "Non-defun: ~s" def))]))
+(defun defun.formals (def)
+  (match def
+    [(defun ,name ,formals ,body) formals]
+    [else (error 'defun.formals (format "Non-defun: ~s" def))]))
+(defun defun.body (def)
+  (match def
+    [(defun ,name ,formals ,body) body]
+    [else (error 'defun.body (format "Non-defun: ~s" def))]))
 
 (defun dethm-c (name formals body)
-  (tag 'dethm (list3 name formals body)))
+  `(dethm ,name ,formals ,body))
 (defun dethm? (x)
-  (if/nil (tag? 'dethm x) (list3? (untag x)) 'nil))
-(defun dethm.name (def) (elem1 (untag def)))
-(defun dethm.formals (def) (elem2 (untag def)))
-(defun dethm.body (def) (elem3 (untag def)))
+  (match x
+    [(dethm ,name ,formals ,body) 't]
+    [else 'nil]))
+(defun dethm.name (def)
+  (match def
+    [(dethm ,name ,formals ,body) name]
+    [else (error 'dethm.name (format "Non-dethm: ~s" def))]))
+(defun dethm.formals (def)
+  (match def
+    [(dethm ,name ,formals ,body) formals]
+    [else (error 'dethm.formals (format "Non-dethm: ~s" def))]))
+(defun dethm.body (def)
+  (match def
+    [(dethm ,name ,formals ,body) body]
+    [else (error 'dethm.body (format "Non-dethm: ~s" def))]))
 
 (defun if-QAE (e)
-  (list3 (if.Q e) (if.A e) (if.E e)))
+  (match e
+    [(if ,Q ,A ,E) `(,Q ,A ,E)]))
 (defun QAE-if (es)
   `(if ,(elem1 es) ,(elem2 es) ,(elem3 es)))
 
@@ -96,18 +138,16 @@
       'nil)))
 
 (defun def.name (def)
-  (if/nil (defun? def)
-    (defun.name def)
-    (if/nil (dethm? def)
-      (dethm.name def)
-      def)))
+  (match def
+    [(defun ,name ,formals ,body) name]
+    [(dethm ,name ,formals ,body) name]
+    [else def]))
 
 (defun def.formals (def)
-  (if/nil (dethm? def)
-    (dethm.formals def)
-    (if/nil (defun? def)
-      (defun.formals def)
-      '())))
+  (match def
+    [(defun ,name ,formals ,body) formals]
+    [(dethm ,name ,formals ,body) formals]
+    [else '()]))
 
 (defun if-c-when-necessary (Q A E)
   (if/nil (equal A E) A `(if ,Q ,A ,E)))
