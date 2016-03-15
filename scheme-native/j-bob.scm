@@ -146,29 +146,26 @@
   (if (equal? A E) A `(if ,Q ,A ,E)))
 
 (defun conjunction (es)
-  (match es
-    ['() `'t]
-    [(,e) e]
-    [(,e . ,es)
-     `(if ,e
-        ,(conjunction es)
-        'nil)]))
+  (cond [(and (pair? es) (pair? (cdr es)))
+         `(if ,(car es)
+            ,(conjunction (cdr es))
+            'nil)]
+        [(pair? es) (car es)] ; (null? (cdr es))
+        [else `'t]))
 
 (defun implication (es e)
-  (match es
-    ['() e]
-    [(,prem . ,prems)
-     `(if ,prem
-        ,(implication prems e)
-        't)]))
+  (cond [(pair? es)
+         `(if ,(car es)
+            ,(implication (cdr es) e)
+            't)]
+        [else e]))
 
 (defun lookup (name defs)
-  (match defs
-    ['() name]
-    [(,def . ,defs)
-     (if (equal? (def.name def) name)
-       def
-       (lookup name defs))]))
+  (cond [(pair? defs)
+         (if (equal? (def.name (car defs)) name)
+           (car defs)
+           (lookup name (cdr defs)))]
+        [else name]))
 
 (defun undefined? (name defs)
   (or (not (var? name)) (equal? (lookup name defs) name)))
