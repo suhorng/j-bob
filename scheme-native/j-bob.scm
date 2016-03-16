@@ -171,20 +171,18 @@
   (or (not (var? name)) (equal? (lookup name defs) name)))
 
 (defun arity? (vars es)
-  (if/nil (atom vars)
-    (atom es)
-    (if/nil (atom es)
-      'nil
-      (arity? (cdr vars) (cdr es)))))
+  (cond [(and (pair? vars) (pair? es))
+         (arity? (cdr vars) (cdr es))]
+        [else (and (null? vars) (null? es))]))
 
 (defun args-arity? (def args)
   (if (dethm? def)
-    'nil
+    #f
     (if (defun? def)
       (arity? (defun.formals def) args)
       (if (rator? def)
         (arity? (rator.formals def) args)
-        'nil))))
+        #f))))
 
 (defun app-arity? (defs app)
   (args-arity? (lookup (app.name app) defs)
@@ -201,7 +199,7 @@
     [('quote ,val) #t]
     [(if ,Q ,A ,E) (exprs? defs vars (list Q A E))]
     [(,name . ,args)
-     (if/nil (app-arity? defs `(,name . ,args))
+     (if (app-arity? defs `(,name . ,args))
        (exprs? defs vars args)
        #f)]))
 
@@ -267,7 +265,9 @@
 (defun direction? (dir)
   (if/nil (natp dir)
     #t
-    (member dir '(Q A E))))
+    (if (member dir '(Q A E))
+      #t
+      #f)))
 
 (defun path? (path)
   (if/nil (atom path)
