@@ -194,29 +194,21 @@
   (or (equal? vars 'any) (member var vars)))
 
 (defun exprs? (defs vars es)
-  (if/nil (atom es)
-    't
-    (if (var? (car es))
-      (if (bound? (car es) vars)
-        (exprs? defs vars (cdr es))
-        'nil)
-      (if (quote? (car es))
-        (exprs? defs vars (cdr es))
-        (if (if? (car es))
-          (if/nil (exprs? defs vars
-                (if-QAE (car es)))
-            (exprs? defs vars (cdr es))
-            'nil)
-          (if (app? (car es))
-            (if/nil (app-arity? defs (car es))
-              (if/nil (exprs? defs vars
-                    (app.args (car es)))
-                (exprs? defs vars (cdr es))
-                'nil)
-              'nil)
-            'nil))))))
+  (if (member 'nil (map (lambda (e) (expr? defs vars e)) es))
+    'nil
+    't))
 (defun expr? (defs vars e)
-  (exprs? defs vars (list1 e)))
+  (match e
+    [,x (guard (var? x))
+     (if (bound? x vars)
+       't
+       'nil)]
+    [('quote ,val) 't]
+    [(if ,Q ,A ,E) (exprs? defs vars (list Q A E))]
+    [(,name . ,args)
+     (if/nil (app-arity? defs `(,name . ,args))
+       (exprs? defs vars args)
+       'nil)]))
 
 (defun get-arg-from (n args from)
   (if/nil (atom args)
