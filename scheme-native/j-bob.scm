@@ -194,21 +194,16 @@
   (or (equal? vars 'any) (member var vars)))
 
 (defun exprs? (defs vars es)
-  (if (member 'nil (map (lambda (e) (expr? defs vars e)) es))
-    'nil
-    't))
+  (every (lambda (e) (expr? defs vars e)) es))
 (defun expr? (defs vars e)
   (match e
-    [,x (guard (var? x))
-     (if (bound? x vars)
-       't
-       'nil)]
-    [('quote ,val) 't]
+    [,x (guard (var? x)) (bound? x vars)]
+    [('quote ,val) #t]
     [(if ,Q ,A ,E) (exprs? defs vars (list Q A E))]
     [(,name . ,args)
      (if/nil (app-arity? defs `(,name . ,args))
        (exprs? defs vars args)
-       'nil)]))
+       #f)]))
 
 (defun get-arg-from (n args from)
   (if/nil (atom args)
@@ -241,10 +236,10 @@
 
 (defun subset? (xs ys)
   (if/nil (atom xs)
-    't
+    #t
     (if (member (car xs) ys)
       (subset? (cdr xs) ys)
-      'nil)))
+      #f)))
 
 (defun list-extend (xs x)
   (if/nil (atom xs)
@@ -283,25 +278,25 @@
 
 (defun quoted-exprs? (args)
   (if/nil (atom args)
-    't
+    #t
     (if (quote? (car args))
       (quoted-exprs? (cdr args))
-      'nil)))
+      #f)))
 
 (defun step-args? (defs def args)
   (if (dethm? def)
     (if/nil (arity? (dethm.formals def) args)
       (exprs? defs 'any args)
-      'nil)
+      #f)
     (if (defun? def)
       (if/nil (arity? (defun.formals def) args)
         (exprs? defs 'any args)
-        'nil)
+        #f)
       (if (rator? def)
         (if/nil (arity? (rator.formals def) args)
           (quoted-exprs? args)
-          'nil)
-        'nil))))
+          #f)
+        #f))))
 
 (defun step-app? (defs app)
   (step-args? defs
@@ -312,13 +307,13 @@
   (if/nil (path? (elem1 step))
     (if (app? (elem2 step))
       (step-app? defs (elem2 step))
-      'nil)
-    'nil))
+      #f)
+    #f))
 
 (defun steps? (defs steps)
   (if/nil (atom steps)
     't
-    (if/nil (step? defs (car steps))
+    (if (step? defs (car steps))
       (steps? defs (cdr steps))
       'nil)))
 
@@ -327,9 +322,9 @@
     (if/nil (arity? (defun.formals def) (app.args e))
       (if/nil (formals? (app.args e))
         (subset? (app.args e) vars)
-        'nil)
-      'nil)
-    'nil))
+        #f)
+      #f)
+    #f))
 
 (defun induction-scheme? (defs vars e)
   (if (app? e)
@@ -337,7 +332,7 @@
       (lookup (app.name e) defs)
       vars
       e)
-    'nil))
+    #f))
 
 (defun seed? (defs def seed)
   (if/nil (equal seed 'nil)
@@ -348,7 +343,7 @@
         (induction-scheme? defs
           (dethm.formals def)
           seed)
-        'nil))))
+        #f))))
 
 (defun extend-rec (defs def)
   (if (defun? def)
@@ -360,7 +355,7 @@
 (defun def-contents? (known-defs formals body)
   (if/nil (formals? formals)
     (expr? known-defs formals body)
-    'nil))
+    #f))
 
 (defun def? (known-defs def)
   (if (dethm? def)
@@ -369,7 +364,7 @@
       (def-contents? known-defs
         (dethm.formals def)
         (dethm.body def))
-      'nil)
+      #f)
     (if (defun? def)
       (if/nil (undefined? (defun.name def)
             known-defs)
@@ -377,13 +372,13 @@
           (extend-rec known-defs def)
           (defun.formals def)
           (defun.body def))
-        'nil)
-      'nil)))
+        #f)
+      #f)))
 
 (defun defs? (known-defs defs)
   (if/nil (atom defs)
     't
-    (if/nil (def? known-defs (car defs))
+    (if (def? known-defs (car defs))
       (defs? (list-extend known-defs (car defs))
         (cdr defs))
       'nil)))
@@ -397,8 +392,8 @@
 
 (defun proof? (defs pf)
   (if/nil (list2-or-more? pf)
-    (if/nil (def? defs (elem1 pf))
-      (if/nil (seed? defs (elem1 pf) (elem2 pf))
+    (if (def? defs (elem1 pf))
+      (if (seed? defs (elem1 pf) (elem2 pf))
         (steps? (extend-rec defs (elem1 pf))
           (cdr (cdr pf)))
         'nil)
@@ -787,7 +782,7 @@
 
 (defun J-Bob/step (defs e steps)
   (if/nil (defs? '() defs)
-    (if/nil (expr? defs 'any e)
+    (if (expr? defs 'any e)
       (if/nil (steps? defs steps)
         (rewrite/steps defs e steps)
         e)
