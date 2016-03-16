@@ -146,26 +146,26 @@
   (if (equal? A E) A `(if ,Q ,A ,E)))
 
 (defun conjunction (es)
-  (cond [(and (pair? es) (pair? (cdr es)))
+  (cond [(null? es) `'t]
+        [(pair? (cdr es)) ; x1 . x2 . xs
          `(if ,(car es)
             ,(conjunction (cdr es))
             'nil)]
-        [(pair? es) (car es)] ; (null? (cdr es))
-        [else `'t]))
+        [else (car es)])) ; x1 . '()
 
 (defun implication (es e)
-  (cond [(pair? es)
+  (cond [(null? es) e]
+        [else
          `(if ,(car es)
             ,(implication (cdr es) e)
-            't)]
-        [else e]))
+            't)]))
 
 (defun lookup (name defs)
-  (cond [(pair? defs)
-         (if (equal? (def.name (car defs)) name)
-           (car defs)
-           (lookup name (cdr defs)))]
-        [else name]))
+  (cond [(null? defs) name]
+        [(equal? (def.name (car defs)) name)
+         (car defs)]
+        [else
+         (lookup name (cdr defs))]))
 
 (defun undefined? (name defs)
   (or (not (var? name)) (equal? (lookup name defs) name)))
@@ -204,33 +204,27 @@
        #f)]))
 
 (defun get-arg-from (n args from)
-  (if/nil (atom args)
-    'nil
-    (if/nil (equal n from)
-      (car args)
-      (get-arg-from n (cdr args) (+ from '1)))))
+  (cond [(null? args) 'nil]
+        [(equal? n from) (car args)]
+        [else (get-arg-from n (cdr args) (+ from '1))]))
 (defun get-arg (n args)
   (get-arg-from n args '1))
 
 (defun set-arg-from (n args y from)
-  (if/nil (atom args)
-    '()
-    (if/nil (equal n from)
-      (cons y (cdr args))
-      (cons (car args)
-        (set-arg-from n (cdr args) y
-          (+ from '1))))))
+  (cond [(null? args) '()]
+        [(equal? n from) (cons y (cdr args))]
+        [else (cons (car args)
+                (set-arg-from n (cdr args) y
+                  (+ from '1)))]))
 (defun set-arg (n args y)
   (set-arg-from n args y '1))
 
 (defun <=len-from (n args from)
-  (if/nil (atom args)
-    'nil
-    (if/nil (equal n from)
-      't
-      (<=len-from n (cdr args) (+ from '1)))))
+  (cond [(null? args) #f]
+        [(equal? n from) #t]
+        [else (<=len-from n (cdr args) (+ from '1))]))
 (defun <=len (n args)
-  (if/nil (< '0 n) (<=len-from n args '1) 'nil))
+  (if (s.< '0 n) (<=len-from n args '1) #f))
 
 (defun subset? (xs ys)
   (if/nil (atom xs)
@@ -561,7 +555,7 @@
       (if/nil (equal dir 'E)
         (if? e)
         (if (app? e)
-          (equal (<=len dir (app.args e)) 't)
+          (<=len dir (app.args e))
           #f)))))
 
 (defun focus-is-at-path? (path e)
