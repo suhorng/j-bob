@@ -257,7 +257,7 @@
 
 (defun step-args? (defs def args)
   (if (dethm? def)
-    (if/nil (arity? (dethm.formals def) args)
+    (if (arity? (dethm.formals def) args)
       (exprs? defs 'any args)
       #f)
     (if (defun? def)
