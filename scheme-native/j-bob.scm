@@ -227,55 +227,33 @@
   (if (s.< '0 n) (<=len-from n args '1) #f))
 
 (defun subset? (xs ys)
-  (if/nil (atom xs)
-    #t
-    (if (member (car xs) ys)
-      (subset? (cdr xs) ys)
-      #f)))
+  (every (lambda (x) (member x ys)) ys))
 
 (defun list-extend (xs x)
-  (if/nil (atom xs)
-    (list1 x)
-    (if/nil (equal (car xs) x)
-      xs
-      (cons (car xs)
-        (list-extend (cdr xs) x)))))
+  (cond [(null? xs) (list x)]
+        [(equal? (car xs) x) xs]
+        [else (cons (car xs)
+                (list-extend (cdr xs) x))]))
 
 (defun list-union (xs ys)
-  (if/nil (atom ys)
-    xs
-    (list-union (list-extend xs (car ys))
-      (cdr ys))))
+  (cond [(null? ys) xs]
+        [else (list-union (list-extend xs (car ys))
+                (cdr ys))]))
 
 (defun formals? (vars)
-  (if/nil (atom vars)
-    't
-    (if (var? (car vars))
-      (if (member (car vars) (cdr vars))
-        'nil
-        (formals? (cdr vars)))
-      'nil)))
+  (cond [(null? vars) #t]
+        [else (and (var? (car vars))
+                (formals? (cdr vars))
+                (not (member (car vars) (cdr vars))))]))
 
 (defun direction? (dir)
-  (if/nil (natp dir)
-    #t
-    (if (member dir '(Q A E))
-      #t
-      #f)))
+  (or (equal (natp dir) 't) (member dir '(Q A E))))
 
 (defun path? (path)
-  (if/nil (atom path)
-    't
-    (if (direction? (car path))
-      (path? (cdr path))
-      'nil)))
+  (every direction? path))
 
 (defun quoted-exprs? (args)
-  (if/nil (atom args)
-    #t
-    (if (quote? (car args))
-      (quoted-exprs? (cdr args))
-      #f)))
+  (every quote? args))
 
 (defun step-args? (defs def args)
   (if (dethm? def)
@@ -298,7 +276,7 @@
     (app.args app)))
 
 (defun step? (defs step)
-  (if/nil (path? (elem1 step))
+  (if (path? (elem1 step))
     (if (app? (elem2 step))
       (step-app? defs (elem2 step))
       #f)
@@ -314,7 +292,7 @@
 (defun induction-scheme-for? (def vars e)
   (if (defun? def)
     (if/nil (arity? (defun.formals def) (app.args e))
-      (if/nil (formals? (app.args e))
+      (if (formals? (app.args e))
         (subset? (app.args e) vars)
         #f)
       #f)
@@ -347,7 +325,7 @@
     defs))
 
 (defun def-contents? (known-defs formals body)
-  (if/nil (formals? formals)
+  (if (formals? formals)
     (expr? known-defs formals body)
     #f))
 
