@@ -507,10 +507,10 @@
 
 (defun prem-E? (prem path e)
   (match `(,path . ,e)
-    [('()        . (if ,Q ,A ,E)) #f]
+    [('()        . ,e) #f]
     [(('E . ,ps) . (if ,Q ,A ,E))
      (guard (equal? Q prem)) #t]
-    [((,p . ,ps) . (if ,Q ,A ,E))
+    [((,p . ,ps) . ,e)
      (prem-E? prem ps (find-focus-at-direction p e))]))
 
 (defun follow-prems (path e thm)
