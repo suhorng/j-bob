@@ -115,7 +115,7 @@
 
 (defun if-QAE (e)
   (match e
-    [(if ,Q ,A ,E) `(,Q ,A ,E)]))
+    [(if . ,QAE) QAE]))
 (defun QAE-if (es)
   `(if ,(elem1 es) ,(elem2 es) ,(elem3 es)))
 
@@ -197,7 +197,7 @@
   (match e
     [,x (guard (var? x)) (bound? x vars)]
     [('quote ,val) #t]
-    [(if ,Q ,A ,E) (exprs? defs vars (list Q A E))]
+    [(if . ,QAE) (exprs? defs vars QAE)]
     [(,name . ,args)
      (if (app-arity? defs `(,name . ,args))
        (exprs? defs vars args)
@@ -359,98 +359,68 @@
         [else #f]))
 
 (defun sub-var (vars args var)
-  (if/nil (atom vars)
-    var
-    (if/nil (equal (car vars) var)
-      (car args)
-      (sub-var (cdr vars) (cdr args) var))))
+  (cond [(null? vars) var]
+        [(equal? (car vars) var) (car args)]
+        [else (sub-var (cdr vars) (cdr args) var)]))
 
 (defun sub-es (vars args es)
-  (if/nil (atom es)
-    '()
-    (if (var? (car es))
-      (cons (sub-var vars args (car es))
-        (sub-es vars args (cdr es)))
-      (if (quote? (car es))
-        (cons (car es)
-          (sub-es vars args (cdr es)))
-        (if (if? (car es))
-          (cons
-            (QAE-if
-              (sub-es vars args
-                (if-QAE (car es))))
-            (sub-es vars args (cdr es)))
-          (cons
-            `(,(app.name (car es)) .
-              ,(sub-es vars args
-                 (app.args (car es))))
-            (sub-es vars args (cdr es))))))))
+  (map (lambda (e) (sub-e vars args e)) es))
 (defun sub-e (vars args e)
-  (elem1 (sub-es vars args (list1 e))))
+  (match e
+    [,x (guard (var? x))
+     (sub-var vars args x)]
+    [('quote ,val) `(quote ,val)]
+    [(if . ,QAE) `(if . ,(sub-es vars args QAE))]
+    [(,name . ,appargs) `(,name . ,(sub-es vars args appargs))]))
 
 (defun exprs-recs (f es)
-  (if/nil (atom es)
-    '()
-    (if (var? (car es))
-      (exprs-recs f (cdr es))
-      (if (quote? (car es))
-        (exprs-recs f (cdr es))
-        (if (if? (car es))
-          (list-union
-            (exprs-recs f (if-QAE (car es)))
-            (exprs-recs f (cdr es)))
-          (if/nil (equal (app.name (car es)) f)
-            (list-union
-              (list1 (car es))
-              (list-union
-                (exprs-recs f
-                  (app.args (car es)))
-                (exprs-recs f (cdr es))))
-            (list-union
-              (exprs-recs f (app.args (car es)))
-              (exprs-recs f
-                (cdr es)))))))))
+  (fold-right list-union '()
+    (map (lambda (e) (expr-recs f e)) es)))
 (defun expr-recs (f e)
-  (exprs-recs f (list1 e)))
+  (match e
+    [,x (guard (var? x)) '()]
+    [('quote ,val) '()]
+    [(if . ,QAE) (exprs-recs f QAE)]
+    [(,name . ,args) (guard (equal? name f))
+     (list-union
+       (list e)
+       (exprs-recs f args))]
+    [(,name . ,args)
+     (exprs-recs f args)]))
 
 (defun totality/< (meas formals app)
-  `(< . ,(list2 (sub-e formals (app.args app) meas)
-           meas)))
+  `(< ,(sub-e formals (app.args app) meas) ,meas))
 
 (defun totality/meas (meas formals apps)
-  (if/nil (atom apps)
-    '()
-    (cons
-      (totality/< meas formals (car apps))
-      (totality/meas meas formals (cdr apps)))))
+  (map (lambda (app) (totality/< meas formals app)) apps))
 
 (defun totality/if/nil (meas f formals e)
-  (if (if? e)
-    (conjunction
+  (match e
+    [(if ,Q ,A ,E)
+     (conjunction
       (list-extend
         (totality/meas meas formals
-          (expr-recs f (if.Q e)))
-        (if-c-when-necessary (if.Q e)
-          (totality/if/nil meas f formals
-            (if.A e))
-          (totality/if/nil meas f formals
-            (if.E e)))))
-    (conjunction
+          (expr-recs f Q))
+        (if-c-when-necessary Q
+          (totality/if/nil meas f formals A)
+          (totality/if/nil meas f formals E))))]
+    [else
+     (conjunction
       (totality/meas meas formals
-        (expr-recs f e)))))
+        (expr-recs f e)))]))
 
 (defun totality/claim (meas def)
-  (if/nil (equal meas 'nil)
-    (if/nil (equal (expr-recs (defun.name def)
-                 (defun.body def))
-               '())
-      `'t
-      `'nil)
-    `(if (natp . ,(list1 meas))
-       ,(totality/if/nil meas (defun.name def)
-          (defun.formals def)
-          (defun.body def))
-       'nil)))
+  (match `(,meas . ,def)
+    [(nil . (defun ,name ,formals ,body))
+     (if (equal? (expr-recs name body) '())
+       `'t
+       `'nil)]
+    [else
+     `(if (natp . ,(list1 meas))
+        ,(totality/if/nil meas (defun.name def)
+           (defun.formals def)
+           (defun.body def))
+        'nil)]))
 
 (defun induction/prems (vars claim apps)
   (if/nil (atom apps)
