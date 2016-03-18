@@ -522,66 +522,48 @@
     [else thm]))
 
 (defun unary-op (rator rand)
-  (if/nil (equal rator 'atom)
-    (atom rand)
-    (if/nil (equal rator 'car)
-      (car rand)
-      (if/nil (equal rator 'cdr)
-        (cdr rand)
-        (if/nil (equal rator 'natp)
-          (natp rand)
-          (if/nil (equal rator 'size)
-            (size rand)
-            'nil))))))
+  (match rator
+    ['atom (atom rand)]
+    ['car (car rand)]
+    ['cdr (cdr rand)]
+    ['natp (natp rand)]
+    ['size (size rand)]
+    [else 'nil]))
 
 (defun binary-op (rator rand1 rand2)
-  (if/nil (equal rator 'equal)
-    (equal rand1 rand2)
-    (if/nil (equal rator 'cons)
-      (cons rand1 rand2)
-      (if/nil (equal rator '+)
-        (+ rand1 rand2)
-        (if/nil (equal rator '<)
-          (< rand1 rand2)
-          'nil)))))
+  (match rator
+    ['equal (equal rand1 rand2)]
+    ['cons (cons rand1 rand2)]
+    ['+ (+ rand1 rand2)]
+    ['< (< rand1 rand2)]
+    [else 'nil]))
 
 (defun apply-op (rator rands)
-  (if (member rator '(atom car cdr natp size))
-    (unary-op rator (elem1 rands))
-    (if (member rator '(equal cons + <))
-      (binary-op rator
-        (elem1 rands)
-        (elem2 rands))
-      'nil)))
+  (cond [(member rator '(atom car cdr natp size))
+         (unary-op rator (car rands))]
+        [(member rator '(equal cons + <))
+         (binary-op rator (car rands) (cadr rands))]
+        [else 'nil]))
 
 (defun rands (args)
-  (if/nil (atom args)
-    '()
-    (cons (quote.value (car args))
-      (rands (cdr args)))))
+  (map quote.value args))
 
 (defun eval-op (app)
-  `',(apply-op (app.name app)
-       (rands (app.args app))))
+  (match app
+    [(,name . ,args)
+     `',(apply-op name (rands args))]))
 
 (defun app-of-equal? (e)
-  (if (app? e)
-    (equal (app.name e) 'equal)
-    'nil))
+  (and (app? e) (equal? (app.name e) 'equal)))
 
 (defun equality (focus a b)
-  (if/nil (equal focus a)
-    b
-    (if/nil (equal focus b)
-      a
-      focus)))
+  (cdr (assoc focus
+         `((,a . ,b) (,b . ,a) (,focus . ,focus)))))
 
 (defun equality/equation (focus concl-inst)
-  (if/nil (app-of-equal? concl-inst)
-    (equality focus
-      (elem1 (app.args concl-inst))
-      (elem2 (app.args concl-inst)))
-    focus))
+  (match concl-inst
+    [(equal ,a ,b) (equality focus a b)]
+    [else focus]))
 
 (defun equality/path (e path thm)
   (if (focus-is-at-path? path e)
@@ -592,22 +574,18 @@
     e))
 
 (defun equality/def (claim path app def)
-  (if (rator? def)
-    (equality/path claim path
-      `(equal ,app ,(eval-op app)))
-    (if (defun? def)
-      (equality/path claim path
-        (sub-e (defun.formals def)
-          (app.args app)
-          `(equal
-              (,(defun.name def) . ,(defun.formals def))
-              ,(defun.body def))))
-      (if (dethm? def)
-        (equality/path claim path
-          (sub-e (dethm.formals def)
-            (app.args app)
-            (dethm.body def)))
-        claim))))
+  (match `(,def . ,app)
+    [(,def . ,app) (guard (rator? def))
+     (equality/path claim path
+       `(equal ,app ,(eval-op app)))]
+    [((defun ,name ,formals ,body) . (,appname . ,args))
+     (equality/path claim path
+       (sub-e formals args
+         `(equal (,name . ,formals) ,body)))]
+    [((dethm ,name ,formals ,body) . (,appname . ,args))
+     (equality/path claim path
+       (sub-e formals args body))]
+    [else claim]))
 
 (defun rewrite/step (defs claim step)
   (equality/def claim (elem1 step) (elem2 step)
