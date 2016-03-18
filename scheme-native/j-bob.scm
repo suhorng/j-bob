@@ -490,7 +490,7 @@
       (find-focus-at-direction (car path) e))))
 
 (defun rewrite-focus-at-path (path e1 e2)
-  (if/nil (atom path)
+  (if (null? path)
     e2
     (rewrite-focus-at-direction (car path) e1
       (rewrite-focus-at-path (cdr path)
@@ -498,39 +498,28 @@
         e2))))
 
 (defun prem-A? (prem path e)
-  (if/nil (atom path)
-    'nil
-    (if/nil (equal (car path) 'A)
-      (if/nil (equal (if.Q e) prem)
-        't
-        (prem-A? prem (cdr path)
-          (find-focus-at-direction (car path)
-            e)))
-      (prem-A? prem (cdr path)
-        (find-focus-at-direction (car path)
-          e)))))
+  (match `(,path . ,e)
+    [('()        . ,e) #f]
+    [(('A . ,ps) . (if ,Q ,A ,E))
+     (guard (equal? Q prem)) #t]
+    [((,p . ,ps) . ,e)
+     (prem-A? prem ps (find-focus-at-direction p e))]))
 
 (defun prem-E? (prem path e)
-  (if/nil (atom path)
-    'nil
-    (if/nil (equal (car path) 'E)
-      (if/nil (equal (if.Q e) prem)
-        't
-        (prem-E? prem (cdr path)
-          (find-focus-at-direction (car path)
-            e)))
-      (prem-E? prem (cdr path)
-        (find-focus-at-direction (car path)
-          e)))))
+  (match `(,path . ,e)
+    [('()        . (if ,Q ,A ,E)) #f]
+    [(('E . ,ps) . (if ,Q ,A ,E))
+     (guard (equal? Q prem)) #t]
+    [((,p . ,ps) . (if ,Q ,A ,E))
+     (prem-E? prem ps (find-focus-at-direction p e))]))
 
 (defun follow-prems (path e thm)
-  (if (if? thm)
-    (if/nil (prem-A? (if.Q thm) path e)
-      (follow-prems path e (if.A thm))
-      (if/nil (prem-E? (if.Q thm) path e)
-        (follow-prems path e (if.E thm))
-        thm))
-    thm))
+  (match thm
+    [(if ,Q ,A ,E) (guard (prem-A? Q path e))
+     (follow-prems path e A)]
+    [(if ,Q ,A ,E) (guard (prem-E? Q path e))
+     (follow-prems path e E)]
+    [else thm]))
 
 (defun unary-op (rator rand)
   (if/nil (equal rator 'atom)
