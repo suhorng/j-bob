@@ -423,76 +423,68 @@
         'nil)]))
 
 (defun induction/prems (vars claim apps)
-  (if/nil (atom apps)
-    '()
-    (cons
-      (sub-e vars (app.args (car apps)) claim)
-      (induction/prems vars claim (cdr apps)))))
+  (map (lambda (app) (sub-e vars (app.args app) claim))
+    apps))
 
 (defun induction/if/nil (vars claim f e)
-  (if (if? e)
-    (implication
-      (induction/prems vars claim
-        (expr-recs f (if.Q e)))
-      (if-c-when-necessary (if.Q e)
-        (induction/if/nil vars claim f (if.A e))
-        (induction/if/nil vars claim f (if.E e))))
-    (implication
+  (match e
+    [(if ,Q ,A ,E)
+     (implication
+       (induction/prems vars claim
+         (expr-recs f Q))
+       (if-c-when-necessary Q
+         (induction/if/nil vars claim f A)
+         (induction/if/nil vars claim f E)))]
+    [else
+     (implication
       (induction/prems vars claim
         (expr-recs f e))
-      claim)))
+      claim)]))
 
 (defun induction/defun (vars claim def)
-  (induction/if/nil vars claim (defun.name def)
-    (sub-e (defun.formals def) vars
-      (defun.body def))))
+  (match def
+    [(defun ,name ,formals ,body)
+     (induction/if/nil vars claim name
+       (sub-e formals vars body))]))
 
 (defun induction/claim (defs seed def)
-  (if/nil (equal seed 'nil)
-    (dethm.body def)
-    (induction/defun (app.args seed)
-      (dethm.body def)
-      (lookup (app.name seed) defs))))
+  (match `(,seed . ,def)
+    [(nil . (dethm ,name ,formals ,body)) body]
+    [((,name . ,args) . (dethm ,thmname ,formals ,body))
+     (induction/defun args body (lookup name defs))]))
 
 (defun find-focus-at-direction (dir e)
-  (if/nil (equal dir 'Q)
-    (if.Q e)
-    (if/nil (equal dir 'A)
-      (if.A e)
-      (if/nil (equal dir 'E)
-        (if.E e)
-        (get-arg dir (app.args e))))))
+  (match e
+    [(if ,Q ,A ,E)
+     (cond [(equal? dir 'Q) Q]
+           [(equal? dir 'A) A]
+           [(equal? dir 'E) E])]
+    [(,name . ,args) (get-arg dir args)]))
 
 (defun rewrite-focus-at-direction (dir e1 e2)
-  (if/nil (equal dir 'Q)
-    `(if ,e2 ,(if.A e1) ,(if.E e1))
-    (if/nil (equal dir 'A)
-      `(if ,(if.Q e1) ,e2 ,(if.E e1))
-      (if/nil (equal dir 'E)
-        `(if ,(if.Q e1) ,(if.A e1) ,e2)
-        `(,(app.name e1) . ,(set-arg dir (app.args e1) e2))))))
+  (match e1
+    [(if ,Q ,A ,E)
+     (cond [(equal? dir 'Q) `(if ,e2 ,A ,E)]
+           [(equal? dir 'A) `(if ,Q ,e2 ,E)]
+           [(equal? dir 'E) `(if ,Q ,A ,e2)])]
+    [(,name . ,args) `(,name . ,(set-arg dir args e2))]))
 
 (defun focus-is-at-direction? (dir e)
-  (if/nil (equal dir 'Q)
-    (if? e)
-    (if/nil (equal dir 'A)
-      (if? e)
-      (if/nil (equal dir 'E)
-        (if? e)
-        (if (app? e)
-          (<=len dir (app.args e))
-          #f)))))
+  (match e
+    [(if ,Q ,A ,E) (member dir '(Q A E))]
+    [(,name . ,args) (guard (not (equal? name 'quote)))
+     (<=len dir args)]
+    [else #f]))
 
 (defun focus-is-at-path? (path e)
-  (if/nil (atom path)
-    't
-    (if (focus-is-at-direction? (car path) e)
-      (focus-is-at-path? (cdr path)
-        (find-focus-at-direction (car path) e))
-      'nil)))
+  (cond [(null? path) #t]
+        [(focus-is-at-direction? (car path) e)
+         (focus-is-at-path? (cdr path)
+           (find-focus-at-direction (car path) e))]
+        [else #f]))
 
 (defun find-focus-at-path (path e)
-  (if/nil (atom path)
+  (if (null? path)
     e
     (find-focus-at-path (cdr path)
       (find-focus-at-direction (car path) e))))
@@ -603,7 +595,7 @@
     focus))
 
 (defun equality/path (e path thm)
-  (if/nil (focus-is-at-path? path e)
+  (if (focus-is-at-path? path e)
     (rewrite-focus-at-path path e
       (equality/equation
         (find-focus-at-path path e)
