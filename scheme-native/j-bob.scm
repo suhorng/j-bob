@@ -172,31 +172,27 @@
        (exprs? defs vars args)
        #f)]))
 
-(define (get-arg-from n args from)
-  (cond [(null? args) 'nil]
-        [(equal? n from) (car args)]
-        [else (get-arg-from n (cdr args) (+ from '1))]))
 (define (get-arg n args)
-  (get-arg-from n args '1))
+  (define (get-arg-from args from)
+    (cond [(null? args) 'nil]
+          [(equal? n from) (car args)]
+          [else (get-arg-from (cdr args) (+ from '1))]))
+  (get-arg-from args '1))
 
-(define (set-arg-from n args y from)
-  (cond [(null? args) '()]
-        [(equal? n from) (cons y (cdr args))]
-        [else (cons (car args)
-                (set-arg-from n (cdr args) y
-                  (+ from '1)))]))
 (define (set-arg n args y)
-  (set-arg-from n args y '1))
+  (define (set-arg-from args from)
+    (cond [(null? args) '()]
+          [(equal? n from) (cons y (cdr args))]
+          [else (cons (car args)
+                  (set-arg-from (cdr args) (+ from '1)))]))
+  (set-arg-from args '1))
 
-(define (<=len-from n args from)
-  (cond [(null? args) #f]
-        [(equal? n from) #t]
-        [else (<=len-from n (cdr args) (+ from '1))]))
 (define (<=len n args)
-  (if (s.< '0 n) (<=len-from n args '1) #f))
-
-(define (subset? xs ys)
-  (every (lambda (x) (member x ys)) ys))
+  (define (<=len-from args from)
+    (cond [(null? args) #f]
+          [(equal? n from) #t]
+          [else (<=len-from (cdr args) (+ from '1))]))
+  (if (s.< '0 n) (<=len-from args '1) #f))
 
 (define (list-extend xs x)
   (cond [(null? xs) (list x)]
@@ -249,7 +245,7 @@
     [((defun ,name1 ,formals ,body) . (,name2 . ,args))
      (and (arity? formals args)
        (formals? args)
-       (subset? args vars))]
+       (every (lambda (x) (member x vars)) args))]
     [else #f]))
 
 (define (induction-scheme? defs vars e)
@@ -510,9 +506,6 @@
     [(,name . ,args)
      `',(apply-op name (map quote.value args))]))
 
-(define (app-of-equal? e)
-  (and (app? e) (equal? (app.name e) 'equal)))
-
 (define (equality focus a b)
   (cdr (assoc focus
          `((,a . ,b) (,b . ,a) (,focus . ,focus)))))
@@ -611,8 +604,7 @@
     [else defs]))
 
 (define (J-Bob/step defs e steps)
-  (if (and
-       (defs? '() defs)
+  (if (and (defs? '() defs)
        (exprs? defs 'any e)
        (steps? defs steps))
     (rewrite/steps defs e steps)
