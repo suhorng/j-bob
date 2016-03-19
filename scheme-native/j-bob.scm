@@ -592,93 +592,81 @@
     (lookup (app.name (elem2 step)) defs)))
 
 (defun rewrite/continue (defs steps old new)
-  (if/nil (equal new old)
+  (if (or (equal? new old) (null? steps))
     new
-    (if/nil (atom steps)
-      new
-      (rewrite/continue defs (cdr steps) new
-        (rewrite/step defs new (car steps))))))
+    (rewrite/continue defs (cdr steps) new
+      (rewrite/step defs new (car steps)))))
 
 (defun rewrite/steps (defs claim steps)
-  (if/nil (atom steps)
+  (if (null? steps)
     claim
     (rewrite/continue defs (cdr steps) claim
       (rewrite/step defs claim (car steps)))))
 
 (defun rewrite/prove (defs def seed steps)
-  (if (defun? def)
-    (rewrite/steps defs
-      (totality/claim seed def)
-      steps)
-    (if (dethm? def)
-      (rewrite/steps defs
-        (induction/claim defs seed def)
-        steps)
-      `'nil)))
+  (cond [(defun? def)
+         (rewrite/steps defs
+           (totality/claim seed def)
+           steps)]
+        [(dethm? def)
+         (rewrite/steps defs
+           (induction/claim defs seed def)
+           steps)]
+        [else `'nil]))
 
 (defun rewrite/prove+1 (defs pf e)
-  (if/nil (equal e `'t)
-    (rewrite/prove defs (elem1 pf) (elem2 pf)
-      (cdr (cdr pf)))
+  (if (equal? e `'t)
+    (match pf
+      [(,def ,seed . ,steps)
+       (rewrite/prove defs def seed steps)])
     e))
 
 (defun rewrite/prove+ (defs pfs)
-  (if/nil (atom pfs)
+  (if (null? pfs)
     `'t
-    (rewrite/prove+1 defs (car pfs)
-      (rewrite/prove+
-        (list-extend defs (elem1 (car pfs)))
-        (cdr pfs)))))
+    (match pfs
+      [((,def ,seed . ,steps) . ,pfs)
+       (rewrite/prove+1 defs `(,def ,seed . ,steps)
+         (rewrite/prove+ (list-extend defs def) pfs))])))
 
 (defun rewrite/define (defs def seed steps)
-  (if/nil (equal (rewrite/prove defs def seed steps)
-             `'t)
+  (if (equal? (rewrite/prove defs def seed steps) `'t)
     (list-extend defs def)
     defs))
 
 (defun rewrite/define+1 (defs1 defs2 pfs)
-  (if/nil (equal defs1 defs2)
+  (if (equal? defs1 defs2)
     defs1
-    (if/nil (atom pfs)
-      defs2
-      (rewrite/define+1 defs2
-        (rewrite/define defs2
-          (elem1 (car pfs))
-          (elem2 (car pfs))
-          (cdr (cdr (car pfs))))
-        (cdr pfs)))))
+    (match pfs
+      [((,def ,seed . ,pf) . ,pfs)
+       (rewrite/define+1 defs2
+         (rewrite/define defs2 def seed pf) pfs)]
+      [else defs2])))
 
 (defun rewrite/define+ (defs pfs)
-  (if/nil (atom pfs)
-    defs
-    (rewrite/define+1 defs
-      (rewrite/define defs
-        (elem1 (car pfs))
-        (elem2 (car pfs))
-        (cdr (cdr (car pfs))))
-      (cdr pfs))))
+  (match pfs
+    [((,def ,seed . ,pf) . ,pfs)
+     (rewrite/define+1 defs
+       (rewrite/define defs def seed pf)
+       pfs)]
+    [else defs]))
 
 (defun J-Bob/step (defs e steps)
-  (if (defs? '() defs)
-    (if (expr? defs 'any e)
-      (if/nil (steps? defs steps)
-        (rewrite/steps defs e steps)
-        e)
-      e)
+  (if (and
+       (defs? '() defs)
+       (exprs? defs 'any e)
+       (steps? defs steps))
+    (rewrite/steps defs e steps)
     e))
 
 (defun J-Bob/prove (defs pfs)
-  (if (defs? '() defs)
-    (if (proofs? defs pfs)
-      (rewrite/prove+ defs pfs)
-      `'nil)
+  (if (and (defs? '() defs) (proofs? defs pfs))
+    (rewrite/prove+ defs pfs)
     `'nil))
 
 (defun J-Bob/define (defs pfs)
-  (if (defs? '() defs)
-    (if (proofs? defs pfs)
-      (rewrite/define+ defs pfs)
-      defs)
+  (if (and (defs? '() defs) (proofs? defs pfs))
+    (rewrite/define+ defs pfs)
     defs))
 
 (defun axioms ()
