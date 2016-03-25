@@ -1,93 +1,94 @@
+(use util.match)
 
 (define (quote-c value)
   `',value)
 (define (quote? x)
   (match x
-    [('quote ,val) #t]
+    [('quote val) #t]
     [else #f]))
 (define (quote.value e)
   (match e
-    [('quote ,val) val]
+    [('quote val) val]
     [else (error 'quote.value (format "Non-quote value: ~s" e))]))
 
 (define (if-c Q A E) `(if ,Q ,A ,E))
 (define (if? x)
   (match x
-    [(if ,Q ,A ,E) #t]
+    [('if Q A E) #t]
     [else #f]))
 (define (if.Q e)
   (match e
-    [(if ,Q ,A ,E) Q]
+    [('if Q A E) Q]
     [else (error 'if.Q (format "Non-if expression: ~s" e))]))
 (define (if.A e)
   (match e
-    [(if ,Q ,A ,E) A]
+    [('if Q A E) A]
     [else (error 'if.A (format "Non-if expression: ~s" e))]))
 (define (if.E e)
   (match e
-    [(if ,Q ,A ,E) E]
+    [('if Q A E) E]
     [else (error 'if.E (format "Non-if expression: ~s" e))]))
 
 (define (app-c name args) `(,name . ,args))
 (define (app? x)
   (match x
-    [('quote . ,dr) #f]
-    [(if . ,dr) #f]
-    [(,name . ,args) #t]
+    [('quote . dr) #f]
+    [('if . dr) #f]
+    [(name . args) #t]
     [else #f]))
 (define (app.name e)
   (match e
-    [(,name . ,args) name]
+    [(name . args) name]
     [else (error 'app.name (format "Non-application: ~s" e))]))
 (define (app.args e)
   (match e
-    [(,name . ,args) args]
+    [(name . args) args]
     [else (error 'app.args (format "Non-application: ~s" e))]))
 
 (define (var? x)
   (match x
     ['t #f]
     ['nil #f]
-    [,n (guard (equal? (natp n) 't)) #f]
-    [(,ar . ,dr) #f]
+    [(? (lambda (n) (equal? (natp n) 't)) n) #f]
+    [(ar . dr) #f]
     [else #t]))
 
 (define (defun-c name formals body)
   `(defun ,name ,formals ,body))
 (define (defun? x)
   (match x
-    [(defun ,name ,formals ,body) #t]
+    [('defun name formals body) #t]
     [else #f]))
 (define (defun.name def)
   (match def
-    [(defun ,name ,formals ,body) name]
+    [('defun name formals body) name]
     [else (error 'defun.name (format "Non-defun: ~s" def))]))
 (define (defun.formals def)
   (match def
-    [(defun ,name ,formals ,body) formals]
+    [('defun name formals body) formals]
     [else (error 'defun.formals (format "Non-defun: ~s" def))]))
 (define (defun.body def)
   (match def
-    [(defun ,name ,formals ,body) body]
+    [('defun name formals body) body]
     [else (error 'defun.body (format "Non-defun: ~s" def))]))
 
 (define (dethm-c name formals body)
   `(dethm ,name ,formals ,body))
 (define (dethm? x)
   (match x
-    [(dethm ,name ,formals ,body) #t]
+    [('dethm name formals body) #t]
     [else #f]))
 (define (dethm.name def)
   (match def
-    [(dethm ,name ,formals ,body) name]
+    [('dethm name formals body) name]
     [else (error 'dethm.name (format "Non-dethm: ~s" def))]))
 (define (dethm.formals def)
   (match def
-    [(dethm ,name ,formals ,body) formals]
+    [('dethm name formals body) formals]
     [else (error 'dethm.formals (format "Non-dethm: ~s" def))]))
 (define (dethm.body def)
   (match def
-    [(dethm ,name ,formals ,body) body]
+    [('dethm name formals body) body]
     [else (error 'dethm.body (format "Non-dethm: ~s" def))]))
 
 (define (rator? name)
@@ -103,14 +104,14 @@
 
 (define (def.name def)
   (match def
-    [(defun ,name ,formals ,body) name]
-    [(dethm ,name ,formals ,body) name]
+    [('defun name formals body) name]
+    [('dethm name formals body) name]
     [else def]))
 
 (define (def.formals def)
   (match def
-    [(defun ,name ,formals ,body) formals]
-    [(dethm ,name ,formals ,body) formals]
+    [('defun name formals body) formals]
+    [('dethm name formals body) formals]
     [else '()]))
 
 (define (if-c-when-necessary Q A E)
@@ -148,26 +149,26 @@
 
 (define (args-arity? def args)
   (match def
-    [(defun ,name ,formals ,body)
+    [('defun name formals body)
      (arity? formals args)]
-    [(dethm ,name ,formals ,body) #f]
-    [,rator (guard (rator? rator))
+    [('dethm name formals body) #f]
+    [(? rator? rator)
      (arity? (rator.formals rator) args)]
     [else #f]))
 
 (define (app-arity? defs app)
   (match app
-    [(,name . ,args)
+    [(name . args)
      (args-arity? (lookup name defs) args)]))
 
 (define (exprs? defs vars es)
   (every (lambda (e) (expr? defs vars e)) es))
 (define (expr? defs vars e)
   (match e
-    [,x (guard (var? x)) (or (equal? vars 'any) (member x vars))]
-    [('quote ,val) #t]
-    [(if . ,QAE) (exprs? defs vars QAE)]
-    [(,name . ,args)
+    [(? var? x) (or (equal? vars 'any) (member x vars))]
+    [('quote val) #t]
+    [('if . QAE) (exprs? defs vars QAE)]
+    [(name . args)
      (if (app-arity? defs `(,name . ,args))
        (exprs? defs vars args)
        #f)]))
@@ -216,13 +217,13 @@
 
 (define (step-args? defs def args)
   (match def
-    [(defun ,name ,formals ,body)
+    [('defun name formals body)
      (and (arity? formals args)
        (exprs? defs 'any args))]
-    [(dethm ,name ,formals ,body)
+    [('dethm name formals body)
      (and (arity? formals args)
        (exprs? defs 'any args))]
-    [,rator (guard (rator? rator))
+    [(? rator? rator)
      (and (arity? (rator.formals rator) args)
        (every quote? args))]
     [else #f]))
@@ -242,7 +243,7 @@
 
 (define (induction-scheme-for? def vars e)
   (match `(,def . ,e)
-    [((defun ,name1 ,formals ,body) . (,name2 . ,args))
+    [(('defun name1 formals body) . (name2 . args))
      (and (arity? formals args)
        (formals? args)
        (every (lambda (x) (member x vars)) args))]
@@ -250,7 +251,7 @@
 
 (define (induction-scheme? defs vars e)
   (match e
-    [(,name . ,args)
+    [(name . args)
      (induction-scheme-for?
        (lookup name defs)
        vars
@@ -261,8 +262,8 @@
   (if (equal? seed 'nil)
     #t
     (match def
-      [(defun ,name ,formals ,body) (expr? defs formals seed)]
-      [(dethm ,name ,formals ,body)
+      [('defun name formals body) (expr? defs formals seed)]
+      [('dethm name formals body)
        (induction-scheme? defs formals seed)]
       [else #f])))
 
@@ -278,14 +279,14 @@
 
 (define (def? known-defs def)
   (match def
-    [(defun ,name ,formals ,body)
+    [('defun name formals body)
      (if/nil (undefined? name known-defs)
        (def-contents?
          (extend-rec known-defs def)
          formals
          body)
        #f)]
-    [(dethm ,name ,formals ,body)
+    [('dethm name formals body)
      (if/nil (undefined? name known-defs)
        (def-contents? known-defs
          formals
@@ -302,7 +303,7 @@
 
 (define (proof? defs pf)
   (match pf
-    [(,def ,seed . ,steps)
+    [(def seed . steps)
      (and (def? defs def)
        (seed? defs def seed)
        (steps? (extend-rec defs def) steps))]
@@ -324,25 +325,25 @@
   (map (lambda (e) (sub-e vars args e)) es))
 (define (sub-e vars args e)
   (match e
-    [,x (guard (var? x))
+    [(? var? x)
      (sub-var vars args x)]
-    [('quote ,val) `(quote ,val)]
-    [(if . ,QAE) `(if . ,(sub-es vars args QAE))]
-    [(,name . ,appargs) `(,name . ,(sub-es vars args appargs))]))
+    [('quote val) `(quote ,val)]
+    [('if . QAE) `(if . ,(sub-es vars args QAE))]
+    [(name . appargs) `(,name . ,(sub-es vars args appargs))]))
 
 (define (exprs-recs f es)
   (fold-right list-union '()
     (map (lambda (e) (expr-recs f e)) es)))
 (define (expr-recs f e)
   (match e
-    [,x (guard (var? x)) '()]
-    [('quote ,val) '()]
-    [(if . ,QAE) (exprs-recs f QAE)]
-    [(,name . ,args) (guard (equal? name f))
+    [(? var? x) '()]
+    [('quote val) '()]
+    [('if . QAE) (exprs-recs f QAE)]
+    [((? ($ equal? f $) name) . args)
      (list-union
        (list e)
        (exprs-recs f args))]
-    [(,name . ,args)
+    [(name . args)
      (exprs-recs f args)]))
 
 (define (totality/meas meas formals apps)
@@ -352,7 +353,7 @@
 
 (define (totality/if/nil meas f formals e)
   (match e
-    [(if ,Q ,A ,E)
+    [('if Q A E)
      (conjunction
       (list-extend
         (totality/meas meas formals
@@ -367,7 +368,7 @@
 
 (define (totality/claim meas def)
   (match `(,meas . ,def)
-    [(nil . (defun ,name ,formals ,body))
+    [('nil . ('defun name formals body))
      (if (equal? (expr-recs name body) '())
        `'t
        `'nil)]
@@ -384,7 +385,7 @@
 
 (define (induction/if/nil vars claim f e)
   (match e
-    [(if ,Q ,A ,E)
+    [('if Q A E)
      (implication
        (induction/prems vars claim
          (expr-recs f Q))
@@ -399,36 +400,36 @@
 
 (define (induction/defun vars claim def)
   (match def
-    [(defun ,name ,formals ,body)
+    [('defun name formals body)
      (induction/if/nil vars claim name
        (sub-e formals vars body))]))
 
 (define (induction/claim defs seed def)
   (match `(,seed . ,def)
-    [(nil . (dethm ,name ,formals ,body)) body]
-    [((,name . ,args) . (dethm ,thmname ,formals ,body))
+    [('nil . ('dethm name formals body)) body]
+    [((name . args) . ('dethm thmname formals body))
      (induction/defun args body (lookup name defs))]))
 
 (define (find-focus-at-direction dir e)
   (match e
-    [(if ,Q ,A ,E)
+    [('if Q A E)
      (cond [(equal? dir 'Q) Q]
            [(equal? dir 'A) A]
            [(equal? dir 'E) E])]
-    [(,name . ,args) (get-arg dir args)]))
+    [(name . args) (get-arg dir args)]))
 
 (define (rewrite-focus-at-direction dir e1 e2)
   (match e1
-    [(if ,Q ,A ,E)
+    [('if Q A E)
      (cond [(equal? dir 'Q) `(if ,e2 ,A ,E)]
            [(equal? dir 'A) `(if ,Q ,e2 ,E)]
            [(equal? dir 'E) `(if ,Q ,A ,e2)])]
-    [(,name . ,args) `(,name . ,(set-arg dir args e2))]))
+    [(name . args) `(,name . ,(set-arg dir args e2))]))
 
 (define (focus-is-at-direction? dir e)
   (match e
-    [(if ,Q ,A ,E) (member dir '(Q A E))]
-    [(,name . ,args) (guard (not (equal? name 'quote)))
+    [('if Q A E) (member dir '(Q A E))]
+    [((and name (not 'quote)) . args)
      (<=len dir args)]
     [else #f]))
 
@@ -455,25 +456,23 @@
 
 (define (prem-A? prem path e)
   (match `(,path . ,e)
-    [('()        . ,e) #f]
-    [(('A . ,ps) . (if ,Q ,A ,E))
-     (guard (equal? Q prem)) #t]
-    [((,p . ,ps) . ,e)
+    [('()       . e) #f]
+    [(('A . ps) . ('if (? ($ equal? prem $) Q) A E)) #t]
+    [((p . ps)  . e)
      (prem-A? prem ps (find-focus-at-direction p e))]))
 
 (define (prem-E? prem path e)
   (match `(,path . ,e)
-    [('()        . ,e) #f]
-    [(('E . ,ps) . (if ,Q ,A ,E))
-     (guard (equal? Q prem)) #t]
-    [((,p . ,ps) . ,e)
+    [('()       . e) #f]
+    [(('E . ps) . ('if (? ($ equal? prem $) Q) A E)) #t]
+    [((p . ps)  . e)
      (prem-E? prem ps (find-focus-at-direction p e))]))
 
 (define (follow-prems path e thm)
   (match thm
-    [(if ,Q ,A ,E) (guard (prem-A? Q path e))
+    [('if (? (lambda (Q) (prem-A? Q path e)) Q) A E)
      (follow-prems path e A)]
-    [(if ,Q ,A ,E) (guard (prem-E? Q path e))
+    [('if (? (lambda (Q) (prem-E? Q path e)) Q) A E)
      (follow-prems path e E)]
     [else thm]))
 
@@ -502,9 +501,8 @@
         [else 'nil]))
 
 (define (eval-op app)
-  (match app
-    [(,name . ,args)
-     `',(apply-op name (map quote.value args))]))
+  (match-let1 (name . args) app
+    `',(apply-op name (map quote.value args))))
 
 (define (equality focus a b)
   (cdr (assoc focus
@@ -512,7 +510,7 @@
 
 (define (equality/equation focus concl-inst)
   (match concl-inst
-    [(equal ,a ,b) (equality focus a b)]
+    [('equal a b) (equality focus a b)]
     [else focus]))
 
 (define (equality/path e path thm)
@@ -525,23 +523,22 @@
 
 (define (equality/def claim path app def)
   (match `(,def . ,app)
-    [(,def . ,app) (guard (rator? def))
+    [(? (.$ rator? car) (def . app))
      (equality/path claim path
        `(equal ,app ,(eval-op app)))]
-    [((defun ,name ,formals ,body) . (,appname . ,args))
+    [(('defun name formals body) . (appname . args))
      (equality/path claim path
        (sub-e formals args
          `(equal (,name . ,formals) ,body)))]
-    [((dethm ,name ,formals ,body) . (,appname . ,args))
+    [(('dethm name formals body) . (appname . args))
      (equality/path claim path
        (sub-e formals args body))]
     [else claim]))
 
 (define (rewrite/step defs claim step)
-  (match step
-    [(,path (,name . ,args))
-     (equality/def claim path `(,name . ,args)
-       (lookup name defs))]))
+  (match-let1 (path (name . args)) step
+    (equality/def claim path `(,name . ,args)
+      (lookup name defs))))
 
 (define (rewrite/continue defs steps old new)
   (if (or (equal? new old) (null? steps))
@@ -568,18 +565,16 @@
 
 (define (rewrite/prove+1 defs pf e)
   (if (equal? e `'t)
-    (match pf
-      [(,def ,seed . ,steps)
-       (rewrite/prove defs def seed steps)])
+    (match-let1 (def seed . steps) pf
+      (rewrite/prove defs def seed steps))
     e))
 
 (define (rewrite/prove+ defs pfs)
   (if (null? pfs)
     `'t
-    (match pfs
-      [((,def ,seed . ,steps) . ,pfs)
-       (rewrite/prove+1 defs `(,def ,seed . ,steps)
-         (rewrite/prove+ (list-extend defs def) pfs))])))
+    (match-let1 ((def seed . steps) . pfs) pfs
+      (rewrite/prove+1 defs `(,def ,seed . ,steps)
+        (rewrite/prove+ (list-extend defs def) pfs)))))
 
 (define (rewrite/define defs def seed steps)
   (if (equal? (rewrite/prove defs def seed steps) `'t)
@@ -590,14 +585,14 @@
   (if (equal? defs1 defs2)
     defs1
     (match pfs
-      [((,def ,seed . ,pf) . ,pfs)
+      [((def seed . pf) . pfs)
        (rewrite/define+1 defs2
          (rewrite/define defs2 def seed pf) pfs)]
       [else defs2])))
 
 (define (rewrite/define+ defs pfs)
   (match pfs
-    [((,def ,seed . ,pf) . ,pfs)
+    [((def seed . pf) . pfs)
      (rewrite/define+1 defs
        (rewrite/define defs def seed pf)
        pfs)]
