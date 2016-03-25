@@ -399,10 +399,9 @@
       claim)]))
 
 (define (induction/defun vars claim def)
-  (match def
-    [('defun name formals body)
-     (induction/if/nil vars claim name
-       (sub-e formals vars body))]))
+  (match-let1 ('defun name formals body) def
+    (induction/if/nil vars claim name
+      (sub-e formals vars body))))
 
 (define (induction/claim defs seed def)
   (match `(,seed . ,def)
