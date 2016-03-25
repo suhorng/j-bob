@@ -102,18 +102,6 @@
          '(x y)]
         [else 'nil]))
 
-(define (def.name def)
-  (match def
-    [('defun name formals body) name]
-    [('dethm name formals body) name]
-    [else def]))
-
-(define (def.formals def)
-  (match def
-    [('defun name formals body) formals]
-    [('dethm name formals body) formals]
-    [else '()]))
-
 (define (if-c-when-necessary Q A E)
   (if (equal? A E) A `(if ,Q ,A ,E)))
 
@@ -134,7 +122,7 @@
 
 (define (lookup name defs)
   (cond [(null? defs) name]
-        [(equal? (def.name (car defs)) name)
+        [(equal? (cadar defs) name)
          (car defs)]
         [else
          (lookup name (cdr defs))]))
@@ -162,7 +150,7 @@
      (args-arity? (lookup name defs) args)]))
 
 (define (exprs? defs vars es)
-  (every (lambda (e) (expr? defs vars e)) es))
+  (every ($ expr? defs vars $) es))
 (define (expr? defs vars e)
   (match e
     [(? var? x) (or (equal? vars 'any) (member x vars))]
@@ -229,9 +217,8 @@
     [else #f]))
 
 (define (step-app? defs app)
-  (step-args? defs
-    (lookup (app.name app) defs)
-    (app.args app)))
+  (match-let1 (name . args) app
+    (step-args? defs (lookup name defs) args)))
 
 (define (step? defs step)
   (and (every direction? (car step))
@@ -239,7 +226,7 @@
     (step-app? defs (cadr step))))
 
 (define (steps? defs steps)
-  (every (lambda (step) (step? defs step)) steps))
+  (every ($ step? defs $) steps))
 
 (define (induction-scheme-for? def vars e)
   (match `(,def . ,e)
@@ -279,19 +266,14 @@
 
 (define (def? known-defs def)
   (match def
-    [('defun name formals body)
-     (if/nil (undefined? name known-defs)
+    [((and type (or 'defun 'dethm)) name formals body)
+     (and (undefined? name known-defs)
        (def-contents?
-         (extend-rec known-defs def)
+         (if (equal? type 'defun)
+           (extend-rec known-defs def)
+           known-defs)
          formals
-         body)
-       #f)]
-    [('dethm name formals body)
-     (if/nil (undefined? name known-defs)
-       (def-contents? known-defs
-         formals
-         body)
-       #f)]
+         body))]
     [else #f]))
 
 (define (defs? known-defs defs)
@@ -322,7 +304,7 @@
         [else (sub-var (cdr vars) (cdr args) var)]))
 
 (define (sub-es vars args es)
-  (map (lambda (e) (sub-e vars args e)) es))
+  (map ($ sub-e vars args $) es))
 (define (sub-e vars args e)
   (match e
     [(? var? x)
@@ -333,7 +315,7 @@
 
 (define (exprs-recs f es)
   (fold-right list-union '()
-    (map (lambda (e) (expr-recs f e)) es)))
+    (map ($ expr-recs f $) es)))
 (define (expr-recs f e)
   (match e
     [(? var? x) '()]
@@ -347,8 +329,8 @@
      (exprs-recs f args)]))
 
 (define (totality/meas meas formals apps)
-  (map (lambda (app)
-         `(< ,(sub-e formals (app.args app) meas) ,meas))
+  (map (match-lambda
+         [(name . args) `(< ,(sub-e formals args meas) ,meas)])
     apps))
 
 (define (totality/if/nil meas f formals e)
@@ -380,7 +362,7 @@
         'nil)]))
 
 (define (induction/prems vars claim apps)
-  (map (lambda (app) (sub-e vars (app.args app) claim))
+  (map (match-lambda [(name . args) (sub-e vars args claim)])
     apps))
 
 (define (induction/if/nil vars claim f e)
