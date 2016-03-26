@@ -141,20 +141,15 @@
   (or (not (var? name)) (equal? (lookup name defs) name)))
 
 (define (arity? vars es)
-  (cond [(and (pair? vars) (pair? es))
-         (arity? (cdr vars) (cdr es))]
-        [else (and (null? vars) (null? es))]))
-
-(define (args-arity? def args)
-  (match def
-    [('defun name formals body)
-     (arity? formals args)]
-    [('dethm name formals body) #f]
-    [else #f]))
+  (and (list? vars) (list? es)
+    (equal? (length vars) (length es))))
 
 (define (app-arity? defs app)
   (match-let1 (name . args) app
-    (args-arity? (lookup-extern name defs) args)))
+    (match (lookup-extern name defs)
+      [('defun name formals body)
+       (arity? formals args)]
+      [else #f])))
 
 (define (exprs? defs vars es)
   (every ($ expr? defs vars $) es))
@@ -210,21 +205,15 @@
 (define (direction? dir)
   (or (equal (natp dir) 't) (member dir '(Q A E))))
 
-(define (step-args? defs def args)
-  (match def
-    [('defun name formals body)
-     (and (arity? formals args)
-       (if (rator? name)
-         (every quote? args)
-         (exprs? defs 'any args)))]
-    [('dethm name formals body)
-     (and (arity? formals args)
-       (exprs? defs 'any args))]
-    [else #f]))
-
 (define (step-app? defs app)
   (match-let1 (name . args) app
-    (step-args? defs (lookup-extern name defs) args)))
+    (match (lookup-extern name defs)
+      [((and type (or 'defun 'dethm)) name formals body)
+       (and (arity? formals args)
+         (if (and (equal? type 'defun) (procedure? name))
+           (every quote? args)
+           (exprs? defs 'any args)))]
+      [else #f])))
 
 (define (step? defs step)
   (and (every direction? (car step))
