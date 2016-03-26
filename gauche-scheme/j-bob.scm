@@ -1,5 +1,16 @@
 (use util.match)
 
+(define extern-ops
+  `((defun atom (xs) ,atom)
+    (defun car (xs) ,car)
+    (defun cdr (xs) ,cdr)
+    (defun natp (n) ,natp)
+    (defun size (xs) ,size)
+    (defun equal (x y) ,equal)
+    (defun cons (x xs) ,cons)
+    (defun + (n m) ,+)
+    (defun < (n m) ,<)))
+
 (define (quote-c value)
   `',value)
 (define (quote? x)
@@ -92,15 +103,7 @@
     [else (error 'dethm.body (format "Non-dethm: ~s" def))]))
 
 (define (rator? name)
-  (member name
-    '(equal atom car cdr cons natp size + <)))
-
-(define (rator.formals rator)
-  (cond [(member rator '(atom car cdr natp size))
-         '(x)]
-        [(member rator '(equal cons + <))
-         '(x y)]
-        [else 'nil]))
+  (member name (map defun.name extern-ops)))
 
 (define (if-c-when-necessary Q A E)
   (if (equal? A E) A `(if ,Q ,A ,E)))
@@ -141,7 +144,8 @@
      (arity? formals args)]
     [('dethm name formals body) #f]
     [(? rator? rator)
-     (arity? (rator.formals rator) args)]
+     (arity? (defun.formals (lookup rator extern-ops))
+       args)]
     [else #f]))
 
 (define (app-arity? defs app)
@@ -211,7 +215,9 @@
      (and (arity? formals args)
        (exprs? defs 'any args))]
     [(? rator? rator)
-     (and (arity? (rator.formals rator) args)
+     (and (arity? (defun.formals
+                    (lookup rator extern-ops))
+            args)
        (every quote? args))]
     [else #f]))
 
@@ -452,33 +458,10 @@
            [else thm])]
     [else thm]))
 
-(define (unary-op rator rand)
-  (match rator
-    ['atom (atom rand)]
-    ['car (car rand)]
-    ['cdr (cdr rand)]
-    ['natp (natp rand)]
-    ['size (size rand)]
-    [else 'nil]))
-
-(define (binary-op rator rand1 rand2)
-  (match rator
-    ['equal (equal rand1 rand2)]
-    ['cons (cons rand1 rand2)]
-    ['+ (+ rand1 rand2)]
-    ['< (< rand1 rand2)]
-    [else 'nil]))
-
-(define (apply-op rator rands)
-  (cond [(member rator '(atom car cdr natp size))
-         (unary-op rator (car rands))]
-        [(member rator '(equal cons + <))
-         (binary-op rator (car rands) (cadr rands))]
-        [else 'nil]))
-
 (define (eval-op app)
-  (match-let1 (name . args) app
-    `',(apply-op name (map quote.value args))))
+  (match-let* ([(name . args) app]
+               [('defun name_ formals op) (lookup name extern-ops)])
+    `',(apply op (map quote.value args))))
 
 (define (equality focus a b)
   (cdr (assoc focus
