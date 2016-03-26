@@ -102,8 +102,10 @@
     [('dethm name formals body) body]
     [else (error 'dethm.body (format "Non-dethm: ~s" def))]))
 
-(define (rator? name)
-  (member name (map defun.name extern-ops)))
+(define rator?
+  (let ([rators (map defun.name extern-ops)])
+    (lambda (name)
+      (member name rators))))
 
 (define (if-c-when-necessary Q A E)
   (if (equal? A E) A `(if ,Q ,A ,E)))
@@ -127,8 +129,13 @@
   (cond [(null? defs) name]
         [(equal? (cadar defs) name)
          (car defs)]
-        [else
-         (lookup name (cdr defs))]))
+        [else (lookup name (cdr defs))]))
+
+(define (lookup-extern name defs)
+  (let ([def (lookup name defs)])
+    (if (equal? def name)
+      (lookup name extern-ops)
+      def)))
 
 (define (undefined? name defs)
   (or (not (var? name)) (equal? (lookup name defs) name)))
@@ -143,14 +150,11 @@
     [('defun name formals body)
      (arity? formals args)]
     [('dethm name formals body) #f]
-    [(? rator? rator)
-     (arity? (defun.formals (lookup rator extern-ops))
-       args)]
     [else #f]))
 
 (define (app-arity? defs app)
   (match-let1 (name . args) app
-    (args-arity? (lookup name defs) args)))
+    (args-arity? (lookup-extern name defs) args)))
 
 (define (exprs? defs vars es)
   (every ($ expr? defs vars $) es))
@@ -210,20 +214,17 @@
   (match def
     [('defun name formals body)
      (and (arity? formals args)
-       (exprs? defs 'any args))]
+       (if (rator? name)
+         (every quote? args)
+         (exprs? defs 'any args)))]
     [('dethm name formals body)
      (and (arity? formals args)
        (exprs? defs 'any args))]
-    [(? rator? rator)
-     (and (arity? (defun.formals
-                    (lookup rator extern-ops))
-            args)
-       (every quote? args))]
     [else #f]))
 
 (define (step-app? defs app)
   (match-let1 (name . args) app
-    (step-args? defs (lookup name defs) args)))
+    (step-args? defs (lookup-extern name defs) args)))
 
 (define (step? defs step)
   (and (every direction? (car step))
