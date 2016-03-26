@@ -145,9 +145,8 @@
     [else #f]))
 
 (define (app-arity? defs app)
-  (match app
-    [(name . args)
-     (args-arity? (lookup name defs) args)]))
+  (match-let1 (name . args) app
+    (args-arity? (lookup name defs) args)))
 
 (define (exprs? defs vars es)
   (every ($ expr? defs vars $) es))
@@ -435,26 +434,22 @@
         (find-focus-at-direction (car path) e1)
         e2))))
 
-(define (prem-A? prem path e)
+(define (prem-? dir prem path e)
   (match `(,path . ,e)
-    [('()       . e) #f]
-    [(('A . ps) . ('if (? ($ equal? prem $) Q) A E)) #t]
-    [((p . ps)  . e)
-     (prem-A? prem ps (find-focus-at-direction p e))]))
-
-(define (prem-E? prem path e)
-  (match `(,path . ,e)
-    [('()       . e) #f]
-    [(('E . ps) . ('if (? ($ equal? prem $) Q) A E)) #t]
-    [((p . ps)  . e)
-     (prem-E? prem ps (find-focus-at-direction p e))]))
+    [('()      . e) #f]
+    [((p . ps) . ('if Q A E)) (=> match-failed)
+     (if (and (equal? p dir) (equal? prem Q))
+       #t
+       (match-failed))]
+    [((p . ps) . e)
+     (prem-? dir prem ps (find-focus-at-direction p e))]))
 
 (define (follow-prems path e thm)
   (match thm
-    [('if (? (lambda (Q) (prem-A? Q path e)) Q) A E)
-     (follow-prems path e A)]
-    [('if (? (lambda (Q) (prem-E? Q path e)) Q) A E)
-     (follow-prems path e E)]
+    [('if Q A E)
+     (cond [(prem-? 'A Q path e) (follow-prems path e A)]
+           [(prem-? 'E Q path e) (follow-prems path e E)]
+           [else thm])]
     [else thm]))
 
 (define (unary-op rator rand)
@@ -503,18 +498,14 @@
     e))
 
 (define (equality/def claim path app def)
-  (match `(,def . ,app)
-    [(? (.$ rator? car) (def . app))
-     (equality/path claim path
-       `(equal ,app ,(eval-op app)))]
-    [(('defun name formals body) . (appname . args))
-     (equality/path claim path
-       (sub-e formals args
-         `(equal (,name . ,formals) ,body)))]
-    [(('dethm name formals body) . (appname . args))
-     (equality/path claim path
-       (sub-e formals args body))]
-    [else claim]))
+  (match-let1
+    (formals . thm)
+    (match def
+      [(? rator? def)             `(()       . (equal ,app ,(eval-op app)))]
+      [('defun name formals body) `(,formals . (equal (,name . ,formals) ,body))]
+      [('dethm name formals body) `(,formals . ,body)])
+    (equality/path claim path
+      (sub-e formals (app.args app) thm))))
 
 (define (rewrite/step defs claim step)
   (match-let1 (path (name . args)) step
